@@ -74,19 +74,19 @@ fn main() {
     let local_addr = rw.local_addr().unwrap();
     match lib::stun_test_1(&rw, server_addr, id) {
         Ok(resp1) => {
-            if resp1.mapped_addr == local_addr {
+            if resp1.mapped_address == local_addr {
                 // No NAT, check for firewall
                 // STUN test II
                 match lib::stun_test_2(&rw, server_addr, id) {
                     Ok(_) => {
                         println!("Local Address : {}", local_addr);
-                        println!("Remote Address: {}", resp1.mapped_addr);
+                        println!("Remote Address: {}", resp1.mapped_address);
                         println!("NAT Type      : Open Internet");
                     }
                     Err(ref e) => match e.kind() {
                         ErrorKind::TimedOut => {
                             println!("Local Address : {}", local_addr);
-                            println!("Remote Address: {}", resp1.mapped_addr);
+                            println!("Remote Address: {}", resp1.mapped_address);
                             println!("NAT Type      : Symmetric Firewall");
                         }
                         _ => eprintln!("{}", e),
@@ -98,24 +98,27 @@ fn main() {
                 match lib::stun_test_2(&rw, server_addr, id) {
                     Ok(_) => {
                         println!("Local Address : {}", local_addr);
-                        println!("Remote Address: {}", resp1.mapped_addr);
+                        println!("Remote Address: {}", resp1.mapped_address);
                         println!("NAT Type      : Full-cone NAT");
                     }
                     Err(ref e) => match e.kind() {
                         ErrorKind::TimedOut => {
                             // STUN test I
-                            match lib::stun_test_3(&rw, resp1.changed_addr, id) {
+                            match lib::stun_test_3(&rw, resp1.changed_address, id) {
                                 Ok(resp2) => {
-                                    if resp1.mapped_addr.ip() != resp2.mapped_addr.ip() {
+                                    if resp1.mapped_address.ip() != resp2.mapped_address.ip() {
                                         println!("Local Address : {}", local_addr);
-                                        println!("Remote Address: {}", resp1.mapped_addr);
+                                        println!("Remote Address: {}", resp1.mapped_address);
                                         println!("NAT Type      : Symmetric NAT");
                                     } else {
                                         // STUN test III
-                                        match lib::stun_test_3(&rw, resp1.changed_addr, id) {
+                                        match lib::stun_test_3(&rw, resp1.changed_address, id) {
                                             Ok(_) => {
                                                 println!("Local Address : {}", local_addr);
-                                                println!("Remote Address: {}", resp1.mapped_addr);
+                                                println!(
+                                                    "Remote Address: {}",
+                                                    resp1.mapped_address
+                                                );
                                                 println!("NAT Type      : Restricted cone NAT");
                                             }
                                             Err(ref e) => match e.kind() {
@@ -123,7 +126,7 @@ fn main() {
                                                     println!("Local Address : {}", local_addr);
                                                     println!(
                                                         "Remote Address: {}",
-                                                        resp1.mapped_addr
+                                                        resp1.mapped_address
                                                     );
                                                     println!("NAT Type      : Restricted port NAT");
                                                 }
@@ -132,7 +135,14 @@ fn main() {
                                         }
                                     }
                                 }
-                                Err(ref e) => eprintln!("{}", e),
+                                Err(ref e) => match e.kind() {
+                                    ErrorKind::TimedOut => {
+                                        println!("Local Address : {}", local_addr);
+                                        println!("Remote Address: {}", resp1.mapped_address);
+                                        println!("NAT Type      : Symmetric NAT");
+                                    }
+                                    _ => eprintln!("{}", e),
+                                },
                             }
                         }
                         _ => eprintln!("{}", e),

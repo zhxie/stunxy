@@ -1,12 +1,13 @@
 //! Deal with NAT traversal using STUN.
 
-use bytes::BytesMut;
 use rand::Rng;
 use socks::{Socks5Datagram, TargetAddr};
 use std::io::{Error, ErrorKind, Result};
 use std::net::{SocketAddr, UdpSocket};
 use std::time::Duration;
-use stun3489::codec::{self, BindRequest, ChangeRequest, Request};
+
+mod codec;
+use codec::{ChangeRequest, Request, Response};
 
 /// Represents an socket which can send data to and receive data from a certain address.
 pub trait RW: Send + Sync {
@@ -162,59 +163,50 @@ pub fn generate_rand_id() -> u64 {
     r
 }
 
-/// Represents a response of a STUN request.
-pub struct Response {
-    /// Represents the mapped address.
-    pub mapped_addr: SocketAddr,
-    /// Represents the changed address.
-    pub changed_addr: SocketAddr,
-}
-
 /// Executes a STUN test I.
 pub fn stun_test_1(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Response> {
     // Request echo from same address, same port
-    let req = BindRequest {
+    let req = Request {
         response_address: None,
         change_request: ChangeRequest::None,
         username: None,
     };
 
-    stun_test(rw, addr, id, Request::Bind(req))
+    stun_test(rw, addr, id, req)
 }
 
 /// Executes a STUN test II.
 pub fn stun_test_2(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Response> {
     // Request echo from different address, different port
-    let req = BindRequest {
+    let req = Request {
         response_address: None,
         change_request: ChangeRequest::IpAndPort,
         username: None,
     };
 
-    stun_test(rw, addr, id, Request::Bind(req))
+    stun_test(rw, addr, id, req)
 }
 
 /// Executes a STUN test III.
 pub fn stun_test_3(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Response> {
     // Request echo from same address, different port
-    let req = BindRequest {
+    let req = Request {
         response_address: None,
         change_request: ChangeRequest::Port,
         username: None,
     };
 
-    stun_test(rw, addr, id, Request::Bind(req))
+    stun_test(rw, addr, id, req)
 }
 
 fn stun_test(rw: &Box<dyn RW>, addr: SocketAddr, id: u64, req: Request) -> Result<Response> {
     // Encode
-    let mut buffer = BytesMut::new();
-    stun3489::codec::StunCodec::encode((id, req), &mut buffer)?;
-    let buffer = buffer.freeze();
+    let mut buffer = vec![0u8; u16::MAX as usize];
+    let size = codec::encode((id, req), buffer.as_mut_slice())?;
 
     // Send request
     let mut recv_buffer = vec![0u8; u16::MAX as usize];
-    let _ = rw.send_to(&buffer[..], addr)?;
+    let _ = rw.send_to(&buffer[..size], addr)?;
 
     // Receive
     loop {
@@ -231,7 +223,7 @@ fn stun_test(rw: &Box<dyn RW>, addr: SocketAddr, id: u64, req: Request) -> Resul
 
 fn parse(buffer: &[u8], id: u64) -> Result<Option<Response>> {
     // Decode
-    let r = stun3489::codec::StunCodec::decode_const(buffer)?;
+    let r = codec::decode(buffer)?;
     if let None = r {
         return Ok(None);
     }
@@ -241,10 +233,5 @@ fn parse(buffer: &[u8], id: u64) -> Result<Option<Response>> {
     }
 
     // Parse response
-    match resp {
-        codec::Response::Bind(resp) => Ok(Some(Response {
-            mapped_addr: resp.mapped_address,
-            changed_addr: resp.changed_address,
-        })),
-    }
+    Ok(Some(resp))
 }
