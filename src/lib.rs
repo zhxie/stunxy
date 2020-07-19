@@ -156,7 +156,7 @@ impl RW for Socket {
 }
 
 /// Generates a random transaction ID with 64 bits.
-pub fn generate_rand_id() -> u64 {
+fn generate_rand_id() -> u64 {
     let mut rng = rand::thread_rng();
     let r: u64 = rng.gen();
 
