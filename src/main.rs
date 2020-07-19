@@ -9,8 +9,8 @@ use stunxy as lib;
 #[derive(StructOpt, Clone, Debug, Eq, Hash, PartialEq)]
 #[structopt(about)]
 struct Flags {
-    #[structopt(name = "ADDRESS", help = "Server")]
-    pub server: IpAddr,
+    #[structopt(name = "HOST", help = "Server", default_value = "stun.ekiga.net")]
+    pub server: String,
     #[structopt(
         long,
         short,
@@ -31,7 +31,7 @@ struct Flags {
         short = "w",
         help = "Timeout to wait for each response",
         value_name = "VALUE",
-        default_value = "1000"
+        default_value = "3000"
     )]
     pub timeout: u64,
 }
@@ -40,8 +40,33 @@ fn main() {
     // Parse arguments
     let flags = Flags::from_args();
 
+    let resolve;
+    let server = match flags.server.parse() {
+        Ok(addr) => {
+            resolve = false;
+
+            addr
+        }
+        Err(_) => match dns_lookup::lookup_host(flags.server.as_str()) {
+            Ok(addrs) => {
+                if addrs.is_empty() {
+                    eprintln!("Cannot resolve the hostname");
+                    return;
+                }
+
+                resolve = true;
+
+                addrs[0]
+            }
+            Err(ref e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        },
+    };
+
     // Bind socket
-    let local: SocketAddr = match flags.server {
+    let local: SocketAddr = match server {
         IpAddr::V4(_) => "0.0.0.0:0".parse().unwrap(),
         IpAddr::V6(_) => "[::]:0".parse().unwrap(),
     };
@@ -68,8 +93,14 @@ fn main() {
         }
     }
 
+    if resolve {
+        println!("STUN {} ({})", flags.server, server);
+    } else {
+        println!("STUN {}", server);
+    }
+
     // STUN test I
-    let server_addr = SocketAddr::new(flags.server, flags.port);
+    let server_addr = SocketAddr::new(server, flags.port);
     let local_addr = rw.local_addr().unwrap();
     match lib::stun_test_1(&rw, server_addr) {
         Ok(resp1) => {
