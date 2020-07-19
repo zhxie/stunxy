@@ -1,1 +1,7 @@
 /target
+
+# Visual Studio Code directories
+.vscode/
+
+# CLion directories
+.idea/

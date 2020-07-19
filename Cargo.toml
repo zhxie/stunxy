@@ -3,7 +3,7 @@ name = "stunxy"
 version = "0.1.0"
 authors = ["Xie Zhihao <xzh1206@gmail.com>"]
 edition = "2018"
-description = "Deal with NAT traversal."
+description = "Deal with NAT traversal using STUN."
 documentation = "https://docs.rs/stunxy"
 readme = "README.md"
 repository = "https://github.com/zhxie/stunxy"
@@ -14,6 +14,9 @@ categories = ["command-line-utilities", "network-programming"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bytes = "0.5.6"
 clap = "2.33.1"
-rustun = "0.3.5"
+rand = "0.7.3"
 socks = "0.3.2"
+structopt = "0.3.15"
+stun3489 = "0.5.0"
