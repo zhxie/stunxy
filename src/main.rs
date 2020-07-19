@@ -69,15 +69,14 @@ fn main() {
     }
 
     // STUN test I
-    let id = lib::generate_rand_id();
     let server_addr = SocketAddr::new(flags.server, flags.port);
     let local_addr = rw.local_addr().unwrap();
-    match lib::stun_test_1(&rw, server_addr, id) {
+    match lib::stun_test_1(&rw, server_addr) {
         Ok(resp1) => {
             if resp1.mapped_address == local_addr {
                 // No NAT, check for firewall
                 // STUN test II
-                match lib::stun_test_2(&rw, server_addr, id) {
+                match lib::stun_test_2(&rw, server_addr) {
                     Ok(_) => {
                         println!("Local Address : {}", local_addr);
                         println!("Remote Address: {}", resp1.mapped_address);
@@ -95,7 +94,7 @@ fn main() {
             } else {
                 // NAT detected
                 // STUN test II
-                match lib::stun_test_2(&rw, server_addr, id) {
+                match lib::stun_test_2(&rw, server_addr) {
                     Ok(_) => {
                         println!("Local Address : {}", local_addr);
                         println!("Remote Address: {}", resp1.mapped_address);
@@ -104,7 +103,7 @@ fn main() {
                     Err(ref e) => match e.kind() {
                         ErrorKind::TimedOut => {
                             // STUN test I
-                            match lib::stun_test_3(&rw, resp1.changed_address, id) {
+                            match lib::stun_test_1(&rw, resp1.changed_address) {
                                 Ok(resp2) => {
                                     if resp1.mapped_address.ip() != resp2.mapped_address.ip() {
                                         println!("Local Address : {}", local_addr);
@@ -112,7 +111,7 @@ fn main() {
                                         println!("NAT Type      : Symmetric NAT");
                                     } else {
                                         // STUN test III
-                                        match lib::stun_test_3(&rw, resp1.changed_address, id) {
+                                        match lib::stun_test_3(&rw, resp1.changed_address) {
                                             Ok(_) => {
                                                 println!("Local Address : {}", local_addr);
                                                 println!(

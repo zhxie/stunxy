@@ -164,7 +164,7 @@ pub fn generate_rand_id() -> u64 {
 }
 
 /// Executes a STUN test I.
-pub fn stun_test_1(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Response> {
+pub fn stun_test_1(rw: &Box<dyn RW>, addr: SocketAddr) -> Result<Response> {
     // Request echo from same address, same port
     let req = Request {
         response_address: None,
@@ -172,11 +172,11 @@ pub fn stun_test_1(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Respon
         username: None,
     };
 
-    stun_test(rw, addr, id, req)
+    stun_test(rw, addr, generate_rand_id(), req)
 }
 
 /// Executes a STUN test II.
-pub fn stun_test_2(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Response> {
+pub fn stun_test_2(rw: &Box<dyn RW>, addr: SocketAddr) -> Result<Response> {
     // Request echo from different address, different port
     let req = Request {
         response_address: None,
@@ -184,11 +184,11 @@ pub fn stun_test_2(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Respon
         username: None,
     };
 
-    stun_test(rw, addr, id, req)
+    stun_test(rw, addr, generate_rand_id(), req)
 }
 
 /// Executes a STUN test III.
-pub fn stun_test_3(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Response> {
+pub fn stun_test_3(rw: &Box<dyn RW>, addr: SocketAddr) -> Result<Response> {
     // Request echo from same address, different port
     let req = Request {
         response_address: None,
@@ -196,7 +196,7 @@ pub fn stun_test_3(rw: &Box<dyn RW>, addr: SocketAddr, id: u64) -> Result<Respon
         username: None,
     };
 
-    stun_test(rw, addr, id, req)
+    stun_test(rw, addr, generate_rand_id(), req)
 }
 
 fn stun_test(rw: &Box<dyn RW>, addr: SocketAddr, id: u64, req: Request) -> Result<Response> {
