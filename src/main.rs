@@ -105,7 +105,7 @@ fn main() {
                             // STUN test I
                             match lib::stun_test_1(&rw, resp1.changed_address) {
                                 Ok(resp2) => {
-                                    if resp1.mapped_address.ip() != resp2.mapped_address.ip() {
+                                    if resp1.mapped_address != resp2.mapped_address {
                                         println!("Local Address : {}", local_addr);
                                         println!("Remote Address: {}", resp1.mapped_address);
                                         println!("NAT Type      : Symmetric NAT");
