@@ -16,22 +16,41 @@ struct Flags {
         short,
         help = "Port",
         value_name = "VALUE",
-        default_value = "3478"
+        default_value = "3478",
+        display_order(0)
     )]
     pub port: u16,
     #[structopt(
         long = "socks-proxy",
         short = "s",
         help = "SOCKS proxy",
-        value_name = "ADDRESS"
+        value_name = "ADDRESS",
+        display_order(1)
     )]
     pub proxy: Option<SocketAddr>,
+    #[structopt(
+        long,
+        help = "Username",
+        value_name = "VALUE",
+        requires("password"),
+        display_order(2)
+    )]
+    pub username: Option<String>,
+    #[structopt(
+        long,
+        help = "Password",
+        value_name = "VALUE",
+        requires("username"),
+        display_order(2)
+    )]
+    pub password: Option<String>,
     #[structopt(
         long,
         short = "w",
         help = "Timeout to wait for each response",
         value_name = "VALUE",
-        default_value = "3000"
+        default_value = "3000",
+        display_order(4)
     )]
     pub timeout: u64,
 }
@@ -71,13 +90,19 @@ fn main() {
         IpAddr::V6(_) => "[::]:0".parse().unwrap(),
     };
     let rw: Box<dyn RW> = match flags.proxy {
-        Some(proxy) => match Datagram::bind(proxy, local) {
-            Ok(datagram) => Box::new(datagram),
-            Err(ref e) => {
-                eprintln!("{}", e);
-                return;
+        Some(proxy) => {
+            let auth = match flags.username {
+                Some(username) => Some((username, flags.password.unwrap())),
+                None => None,
+            };
+            match Datagram::bind(proxy, local, auth) {
+                Ok(datagram) => Box::new(datagram),
+                Err(ref e) => {
+                    eprintln!("{}", e);
+                    return;
+                }
             }
-        },
+        }
         None => match Socket::bind(local) {
             Ok(socket) => Box::new(socket),
             Err(ref e) => {

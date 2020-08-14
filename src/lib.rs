@@ -42,8 +42,20 @@ pub struct Datagram {
 
 impl Datagram {
     /// Creates a new `Datagram`.
-    pub fn bind(proxy: SocketAddr, addr: SocketAddr) -> Result<Datagram> {
-        let datagram = Socks5Datagram::bind(proxy, addr)?;
+    pub fn bind(
+        proxy: SocketAddr,
+        addr: SocketAddr,
+        auth: Option<(String, String)>,
+    ) -> Result<Datagram> {
+        let datagram = match auth {
+            Some((username, password)) => Socks5Datagram::bind_with_password(
+                proxy,
+                addr,
+                username.as_str(),
+                password.as_str(),
+            )?,
+            None => Socks5Datagram::bind(proxy, addr)?,
+        };
 
         Ok(Datagram { datagram })
     }
