@@ -2,6 +2,7 @@
 
 use rand::Rng;
 use socks::{Socks5Datagram, TargetAddr};
+use std::fmt::{self, Display};
 use std::io::{Error, ErrorKind, Result};
 use std::net::{SocketAddr, UdpSocket};
 use std::time::Duration;
@@ -246,4 +247,169 @@ fn parse(buffer: &[u8], id: u64) -> Result<Option<Response>> {
 
     // Parse response
     Ok(Some(resp))
+}
+
+#[derive(Clone, Copy, Debug)]
+/// Enumeration of NAT types.
+pub enum NatType {
+    /// Represents the open Internet.
+    OpenInternet,
+    /// Represents the full-cone NAT.
+    FullConeNat,
+    /// Represents the restricted cone NAT.
+    RestrictedConeNat,
+    /// Represents the port restricted cone NAT.
+    PortRestrictedConeNat,
+    /// Represents the symmetric NAT.
+    SymmetricNat,
+    /// Represents the symmetric firewall.
+    SymmetricFirewall,
+    /// Represents the UDP blocked.
+    UdpBlocked,
+}
+
+impl Display for NatType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NatType::OpenInternet => write!(f, "Open Internet"),
+            NatType::FullConeNat => write!(f, "Full-Cone NAT"),
+            NatType::RestrictedConeNat => write!(f, "Restricted cone NAT"),
+            NatType::PortRestrictedConeNat => write!(f, "Port restricted cone NAT"),
+            NatType::SymmetricNat => write!(f, "Symmetric NAT"),
+            NatType::SymmetricFirewall => write!(f, "Symmetric firewall"),
+            NatType::UdpBlocked => write!(f, "UDP blocked"),
+        }
+    }
+}
+
+/// Represents the result of a NAT test.
+pub struct NatTestResult {
+    local_addr: SocketAddr,
+    remote_addr: Option<SocketAddr>,
+    nat_type: NatType,
+}
+
+impl NatTestResult {
+    /// Returns the local address of the NAT test result.
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+
+    /// Returns the remote address of the NAT test result.
+    pub fn remote_addr(&self) -> Option<SocketAddr> {
+        self.remote_addr
+    }
+
+    /// Returns the NAT type of the NAT test result.
+    pub fn nat_type(&self) -> NatType {
+        self.nat_type
+    }
+}
+
+impl Display for NatTestResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Local Address: {}", self.local_addr)?;
+        if let Some(addr) = self.remote_addr {
+            write!(f, "Remote Address: {}", addr)?;
+        }
+        write!(f, "NAT Type: {}", self.nat_type)
+    }
+}
+
+/// Executes a NAT test.
+pub fn nat_test(rw: &Box<dyn RW>, server_addr: SocketAddr) -> Result<NatTestResult> {
+    let local_addr = match rw.local_addr() {
+        Ok(addr) => addr,
+        Err(e) => return Err(Error::new(ErrorKind::NotConnected, e)),
+    };
+
+    // STUN test I
+    let result = match stun_test_1(&rw, server_addr) {
+        Ok(resp1) => {
+            if resp1.mapped_address == local_addr {
+                // No NAT, check for firewall
+                // STUN test II
+                match stun_test_2(&rw, server_addr) {
+                    Ok(_) => NatTestResult {
+                        local_addr,
+                        remote_addr: Some(resp1.mapped_address),
+                        nat_type: NatType::OpenInternet,
+                    },
+                    Err(e) => match e.kind() {
+                        ErrorKind::TimedOut => NatTestResult {
+                            local_addr,
+                            remote_addr: Some(resp1.mapped_address),
+                            nat_type: NatType::SymmetricFirewall,
+                        },
+                        _ => return Err(e),
+                    },
+                }
+            } else {
+                // NAT detected
+                // STUN test II
+                match stun_test_2(&rw, server_addr) {
+                    Ok(_) => NatTestResult {
+                        local_addr,
+                        remote_addr: Some(resp1.mapped_address),
+                        nat_type: NatType::FullConeNat,
+                    },
+                    Err(e) => match e.kind() {
+                        ErrorKind::TimedOut => {
+                            // STUN test I
+                            match stun_test_1(&rw, resp1.changed_address) {
+                                Ok(resp2) => {
+                                    if resp1.mapped_address != resp2.mapped_address {
+                                        NatTestResult {
+                                            local_addr,
+                                            remote_addr: Some(resp1.mapped_address),
+                                            nat_type: NatType::SymmetricNat,
+                                        }
+                                    } else {
+                                        // STUN test III
+                                        match stun_test_3(&rw, resp1.changed_address) {
+                                            Ok(_) => NatTestResult {
+                                                local_addr,
+                                                remote_addr: Some(resp1.mapped_address),
+                                                nat_type: NatType::RestrictedConeNat,
+                                            },
+                                            Err(e) => match e.kind() {
+                                                ErrorKind::TimedOut => NatTestResult {
+                                                    local_addr,
+                                                    remote_addr: Some(resp1.mapped_address),
+                                                    nat_type: NatType::PortRestrictedConeNat,
+                                                },
+                                                _ => return Err(e),
+                                            },
+                                        }
+                                    }
+                                }
+                                Err(e) => match e.kind() {
+                                    ErrorKind::TimedOut => NatTestResult {
+                                        local_addr,
+                                        remote_addr: Some(resp1.mapped_address),
+                                        nat_type: NatType::SymmetricNat,
+                                    },
+                                    _ => return Err(e),
+                                },
+                            }
+                        }
+                        _ => return Err(e),
+                    },
+                }
+            }
+        }
+        Err(e) => {
+            // UDP blocked
+            match e.kind() {
+                ErrorKind::TimedOut => NatTestResult {
+                    local_addr,
+                    remote_addr: None,
+                    nat_type: NatType::UdpBlocked,
+                },
+                _ => return Err(e),
+            }
+        }
+    };
+
+    Ok(result)
 }

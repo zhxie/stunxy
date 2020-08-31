@@ -1,7 +1,7 @@
 use lib::{Datagram, Socket, RW};
 use std::clone::Clone;
 use std::fmt::Display;
-use std::io::{self, ErrorKind};
+use std::io;
 use std::net::{AddrParseError, IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::str::FromStr;
 use std::time::Duration;
@@ -290,96 +290,16 @@ fn main() {
         println!("STUN {}", server);
     }
 
-    // STUN test I
+    // NAT test
     let server_addr = SocketAddr::new(server, flags.port);
-    let local_addr = rw.local_addr().unwrap();
-    match lib::stun_test_1(&rw, server_addr) {
-        Ok(resp1) => {
-            if resp1.mapped_address == local_addr {
-                // No NAT, check for firewall
-                // STUN test II
-                match lib::stun_test_2(&rw, server_addr) {
-                    Ok(_) => {
-                        println!("Local Address : {}", local_addr);
-                        println!("Remote Address: {}", resp1.mapped_address);
-                        println!("NAT Type      : Open Internet");
-                    }
-                    Err(ref e) => match e.kind() {
-                        ErrorKind::TimedOut => {
-                            println!("Local Address : {}", local_addr);
-                            println!("Remote Address: {}", resp1.mapped_address);
-                            println!("NAT Type      : Symmetric Firewall");
-                        }
-                        _ => eprintln!("{}", e),
-                    },
-                }
-            } else {
-                // NAT detected
-                // STUN test II
-                match lib::stun_test_2(&rw, server_addr) {
-                    Ok(_) => {
-                        println!("Local Address : {}", local_addr);
-                        println!("Remote Address: {}", resp1.mapped_address);
-                        println!("NAT Type      : Full-cone NAT");
-                    }
-                    Err(ref e) => match e.kind() {
-                        ErrorKind::TimedOut => {
-                            // STUN test I
-                            match lib::stun_test_1(&rw, resp1.changed_address) {
-                                Ok(resp2) => {
-                                    if resp1.mapped_address != resp2.mapped_address {
-                                        println!("Local Address : {}", local_addr);
-                                        println!("Remote Address: {}", resp1.mapped_address);
-                                        println!("NAT Type      : Symmetric NAT");
-                                    } else {
-                                        // STUN test III
-                                        match lib::stun_test_3(&rw, resp1.changed_address) {
-                                            Ok(_) => {
-                                                println!("Local Address : {}", local_addr);
-                                                println!(
-                                                    "Remote Address: {}",
-                                                    resp1.mapped_address
-                                                );
-                                                println!("NAT Type      : Restricted cone NAT");
-                                            }
-                                            Err(ref e) => match e.kind() {
-                                                ErrorKind::TimedOut => {
-                                                    println!("Local Address : {}", local_addr);
-                                                    println!(
-                                                        "Remote Address: {}",
-                                                        resp1.mapped_address
-                                                    );
-                                                    println!("NAT Type      : Restricted port NAT");
-                                                }
-                                                _ => eprintln!("{}", e),
-                                            },
-                                        }
-                                    }
-                                }
-                                Err(ref e) => match e.kind() {
-                                    ErrorKind::TimedOut => {
-                                        println!("Local Address : {}", local_addr);
-                                        println!("Remote Address: {}", resp1.mapped_address);
-                                        println!("NAT Type      : Symmetric NAT");
-                                    }
-                                    _ => eprintln!("{}", e),
-                                },
-                            }
-                        }
-                        _ => eprintln!("{}", e),
-                    },
-                }
+    match lib::nat_test(&rw, server_addr) {
+        Ok(ref result) => {
+            println!("Local Address : {}", result.local_addr());
+            if let Some(addr) = result.remote_addr() {
+                println!("Remote Address: {}", addr);
             }
+            println!("NAT Type      : {}", result.nat_type());
         }
-        Err(ref e) => {
-            // UDP blocked
-            match e.kind() {
-                ErrorKind::TimedOut => {
-                    println!("Local Address: {}", local_addr);
-                    println!("NAT Type     : UDP blocked");
-                }
-                _ => eprintln!("{}", e),
-            }
-        }
+        Err(ref e) => eprintln!("{}", e),
     }
 }
